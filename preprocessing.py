@@ -1,44 +1,44 @@
 import pandas as pd
-import numpy as np
-from geopy.distance import geodesic
 from utils import calculate_speed
 
 
 def load_and_clean_data():
-    # Load the dataset
+    """
+    Load and clean storm dataset from 'storms.csv'.
+
+    - Standardizes column names
+    - Combines year/month/day/hour into a datetime column
+    - Drops rows missing wind radii info (for reliable modeling)
+    - Fills missing categories
+    - Sorts the data by storm name and time
+    """
     df = pd.read_csv('storms.csv')
 
-    # Check basic info and preview
-    print(df.info())
-    print(df.head())
-
-    # Strip any extra spaces in column names
+    # Clean column names
     df.columns = df.columns.str.strip().str.lower()
 
-    # Combine year, month, day, hour into one datetime column
+    # Create datetime column
     df['datetime'] = pd.to_datetime(df[['year', 'month', 'day', 'hour']], errors='coerce')
 
-    # Drop original columns if you want (optional)
-    # df.drop(columns=['year', 'month', 'day', 'hour'], inplace=True)
-
-    # Preview the result
-    print(df[['datetime', 'lat', 'long', 'wind', 'pressure']].head())
-
-    # Check for missing values
-    print(df.isnull().sum())
-
-    # Drop rows missing wind radii info (2004 onwards only)
+    # Drop rows missing critical data (2004+ storms)
     df = df.dropna(subset=['tropicalstorm_force_diameter', 'hurricane_force_diameter'])
 
-    # Replace missing hurricane category with label
+    # Fill missing hurricane categories
     df['category'] = df['category'].fillna('Not a Hurricane')
 
-    # Sort data by storm name and datetime
-    df = df.sort_values(by=['name', 'year', 'month', 'day', 'hour'])
+    # Sort chronologically by storm name and time
+    df = df.sort_values(by=['name', 'datetime'])
 
     return df
 
+
 def generate_features(df):
+    """
+    Generate lag features, storm speed, interactions, and lead targets for modeling.
+
+    Returns:
+        DataFrame with engineered features ready for training.
+    """
     df = df.sort_values(by=['name', 'datetime']).copy()
 
     # Lag features
@@ -48,29 +48,15 @@ def generate_features(df):
     df['pressure_lag1'] = df.groupby('name')['pressure'].shift(1)
 
     # Time difference (in hours)
-    df['time_diff'] = df['datetime'] - df.groupby('name')['datetime'].shift(1)
-    df['time_diff'] = df['time_diff'].dt.total_seconds() / 3600
+    df['time_diff'] = (df['datetime'] - df.groupby('name')['datetime'].shift(1)).dt.total_seconds() / 3600
 
-    # Drop rows with missing lag/time_diff values
+    # Drop rows missing lagged values or time_diff
     df = df.dropna(subset=[
         'lat_lag1', 'long_lag1', 'wind_lag1', 'pressure_lag1', 'time_diff'
     ]).copy()
 
-    # Calculate storm speed (km/h) using geodesic distance
-    from geopy.distance import geodesic
-
-    def calculate_speed(row):
-        if (
-                pd.notna(row['lat_lag1']) and pd.notna(row['long_lag1']) and
-                pd.notna(row['time_diff']) and row['time_diff'] > 0
-        ):
-            coord1 = (row['lat_lag1'], row['long_lag1'])
-            coord2 = (row['lat'], row['long'])
-            distance_km = geodesic(coord1, coord2).km
-            return distance_km / row['time_diff']  # speed = distance / time
-        return None
-
-    df['storm_speed'] = df.apply(calculate_speed, axis=1)
+    # Calculate storm speed using geodesic distance
+    df['storm_speed'] = df.groupby('name').apply(calculate_speed).explode().astype(float).values
 
     # Interaction feature
     df['wind_pressure_interaction'] = df['wind'] * df['pressure']
@@ -79,10 +65,7 @@ def generate_features(df):
     df['lat_lead1'] = df.groupby('name')['lat'].shift(-1)
     df['long_lead1'] = df.groupby('name')['long'].shift(-1)
 
-    # Drop rows with missing targets
+    # Drop rows missing targets
     df = df.dropna(subset=['lat_lead1', 'long_lead1'])
-
-    # Sanity check
-    print("Missing values after feature generation:\n", df.isnull().sum())
 
     return df
