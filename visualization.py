@@ -1,6 +1,7 @@
 import seaborn as sns
 import matplotlib.pyplot as plt
 import folium
+import os
 
 
 def visualize_data(df):
@@ -10,29 +11,35 @@ def visualize_data(df):
     - Wind vs Pressure scatter plot
     - Correlation heatmap
     """
+    os.makedirs("plots", exist_ok=True)
 
     # Storm speed distribution
+    plt.figure(figsize=(10, 6))
     sns.histplot(df['storm_speed'], bins=50, kde=True)
-    plt.title('Storm Speed Distribution')
-    plt.xlabel('Speed (km/h)')
-    plt.ylabel('Frequency')
+    plt.title('Storm Speed Distribution', fontsize=16)
+    plt.xlabel('Speed (km/h)', fontsize=14)
+    plt.ylabel('Frequency', fontsize=14)
     plt.tight_layout()
+    plt.savefig("plots/storm_speed_distribution.png", dpi=300)
     plt.show()
 
     # Wind vs. Pressure scatter
+    plt.figure(figsize=(10, 6))
     sns.scatterplot(data=df, x='pressure', y='wind')
-    plt.title('Wind Speed vs. Central Pressure')
-    plt.xlabel('Pressure (mb)')
-    plt.ylabel('Wind Speed (knots)')
+    plt.title('Wind Speed vs. Central Pressure', fontsize=16)
+    plt.xlabel('Pressure (mb)', fontsize=14)
+    plt.ylabel('Wind Speed (knots)', fontsize=14)
     plt.tight_layout()
+    plt.savefig("plots/wind_vs_pressure.png", dpi=300)
     plt.show()
 
     # Correlation heatmap
     numeric_df = df.select_dtypes(include=['float64', 'int64'])
-    plt.figure(figsize=(10, 8))
+    plt.figure(figsize=(12, 10))
     sns.heatmap(numeric_df.corr(), annot=True, cmap='coolwarm', fmt='.2f', cbar=True)
-    plt.title('Correlation Matrix')
+    plt.title('Correlation Matrix', fontsize=16)
     plt.tight_layout()
+    plt.savefig("plots/correlation_matrix.png", dpi=300)
     plt.show()
 
 
@@ -88,13 +95,18 @@ def _plot_wind(df, title):
     if 'pred_wind' not in df.columns:
         raise ValueError("Missing 'pred_wind' in DataFrame.")
 
+    os.makedirs("plots", exist_ok=True)
+
     plt.figure(figsize=(12, 6))
     plt.plot(df['datetime'], df['wind'], label='Actual', color='blue', marker='o')
     plt.plot(df['datetime'], df['pred_wind'], label='Predicted', color='red', linestyle='--', marker='x')
-    plt.title(title)
-    plt.xlabel('Datetime')
-    plt.ylabel('Wind Speed (knots)')
+    plt.title(title, fontsize=16)
+    plt.xlabel('Datetime', fontsize=14)
+    plt.ylabel('Wind Speed (knots)', fontsize=14)
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
+
+    safe_title = title.lower().replace(" ", "_").replace(":", "")
+    plt.savefig(f"plots/{safe_title}.png", dpi=300)
     plt.show()
